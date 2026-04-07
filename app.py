@@ -6,8 +6,8 @@ from datetime import datetime
 # 1. 설정 및 데이터 경로
 USER_DB = {"admin": ["fullin123", "이사장", "관리자"], "staff1": ["1111", "김기사", "직원"]}
 CLIENTS = {"A 인쇄소": "경기 파주", "B 문화사": "서울 을지로", "기타": "직접입력"}
-ORDER_FILE = "orders_v13.csv"
-STOCK_FILE = "stock_v13.csv"
+ORDER_FILE = "orders_v14.csv"
+STOCK_FILE = "stock_v14.csv"
 
 def load_data():
     orders = pd.read_csv(ORDER_FILE) if os.path.exists(ORDER_FILE) else pd.DataFrame(columns=['일시','업체','규격','수량','상태','담당'])
@@ -18,7 +18,7 @@ def save_data(orders, stock):
     orders.to_csv(ORDER_FILE, index=False, encoding='utf-8-sig')
     stock.to_csv(STOCK_FILE, index=False, encoding='utf-8-sig')
 
-# 2. 디자인 (여백 및 스타일)
+# 2. 디자인 (여백 유지)
 def apply_style():
     st.markdown("""<style>
     .stApp {background:#f8f9fa}
@@ -46,7 +46,7 @@ def main():
     orders, stock = load_data()
     t1, t2, t3, t4, t5 = st.tabs(["📝 주문등록", "👑 승인관리", "🚚 배송업무", "📦 재고현황", "📊 전체이력"])
 
-    with t1:
+    with t1: # 주문 등록
         st.subheader("신규 주문")
         name = st.selectbox("업체", list(CLIENTS.keys()))
         sp = st.selectbox("규격", stock['규격'].tolist())
@@ -59,39 +59,49 @@ def main():
             stock.loc[stock['규격']==sp, '현재고'] -= qt
             save_data(orders, stock); st.success("주문 완료!"); st.rerun()
 
-    with t2:
-        st.subheader("실시간 승인 대기 목록")
+    with t2: # 승인 관리 (조회 가능)
+        st.subheader("실시간 승인 현황")
         wait = orders[orders['상태']=='대기']
-        if len(wait) == 0:
-            st.write("✅ 현재 대기 중인 주문이 없습니다.")
-        else:
-            for i, r in wait.iterrows():
-                with st.container(border=True):
-                    st.write(f"**{r['업체']}** | {r['규격']} {r['수량']}박스 (상태: {r['상태']})")
-                    # 관리자일 때만 승인 버튼 노출
-                    if st.session_state.ur == "관리자":
-                        if st.button(f"승인하기", key=f"ap_{i}", use_container_width=True):
-                            orders.at[i,'상태']='배송전'; save_data(orders, stock); st.rerun()
-                    else:
-                        st.caption("ℹ️ 승인 대기 중입니다. 관리자의 승인을 기다려주세요.")
+        if len(wait) == 0: st.write("✅ 대기 중인 주문이 없습니다.")
+        for i, r in wait.iterrows():
+            with st.container(border=True):
+                st.write(f"**{r['업체']}** | {r['규격']} {r['수량']}박스")
+                if st.session_state.ur == "관리자":
+                    if st.button(f"승인하기", key=f"ap_{i}", use_container_width=True):
+                        orders.at[i,'상태']='배송전'; save_data(orders, stock); st.rerun()
+                else: st.caption("🕒 관리자 승인 대기 중...")
 
-    with t3:
+    with t3: # 배송 업무 (조회 및 진행도 확인)
+        st.subheader("배송 진행 상황")
+        
+        # 1. 배송 대기 (승인 완료 후)
         ready = orders[orders['상태']=='배송전']
-        for i, r in ready.iterrows():
-            with st.container(border=True):
-                st.write(f"🚚 {r['업체']} ({r['규격']})")
-                if st.button("배송 시작", key=f"go_{i}", use_container_width=True):
-                    orders.at[i,'상태']='중'; orders.at[i,'담당']=st.session_state.un
-                    save_data(orders, stock); st.rerun()
+        if len(ready) > 0:
+            st.write("📦 **배송 준비 중 (승인완료)**")
+            for i, r in ready.iterrows():
+                with st.container(border=True):
+                    st.write(f"**{r['업체']}** ({r['규격']}) - 준비 중")
+                    if st.button("배송 출발", key=f"go_{i}", use_container_width=True):
+                        orders.at[i,'상태']='중'; orders.at[i,'담당']=st.session_state.un
+                        save_data(orders, stock); st.rerun()
+        
         st.divider()
-        ing = orders[(orders['상태']=='중') & (orders['담당']==st.session_state.un)]
-        for i, r in ing.iterrows():
-            with st.container(border=True):
-                st.write(f"📍 {r['업체']} 배송 중")
-                if st.button("🏁 완료", key=f"fi_{i}", type="primary", use_container_width=True):
-                    orders.at[i,'상태']='완료'; save_data(orders, stock); st.rerun()
+        
+        # 2. 배송 중 (진행도 표시)
+        ing = orders[orders['상태']=='중']
+        if len(ing) > 0:
+            st.write("🚚 **현재 배송 중**")
+            for i, r in ing.iterrows():
+                with st.container(border=True):
+                    st.write(f"📍 **{r['업체']}** (담당: {r['담당']})")
+                    # 본인이 담당자이거나 관리자일 때만 완료 버튼 노출
+                    if st.session_state.un == r['담당'] or st.session_state.ur == "관리자":
+                        if st.button("배송 완료 처리", key=f"fi_{i}", type="primary", use_container_width=True):
+                            orders.at[i,'상태']='완료'; save_data(orders, stock); st.rerun()
+                    else:
+                        st.caption(f"✅ {r['담당']}님이 배송하고 있습니다.")
 
-    with t4:
+    with t4: # 재고 현황
         st.subheader("실시간 재고")
         cols = st.columns(3)
         for i, row in stock.iterrows():
