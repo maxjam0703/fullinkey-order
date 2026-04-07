@@ -36,7 +36,7 @@ if 'orders' not in st.session_state:
 
 # --- [로그인 화면] ---
 def login_screen():
-    st.title("🔑 Full In Key 로그인")
+    st.title("Fullinkey 로그인")
     user_id = st.text_input("아이디")
     user_pw = st.text_input("비밀번호", type="password")
     if st.button("로그인", use_container_width=True):
