@@ -6,8 +6,8 @@ from datetime import datetime
 # 1. 설정 및 데이터 경로
 USER_DB = {"admin": ["fullin123", "이사장", "관리자"], "staff1": ["1111", "김기사", "직원"]}
 CLIENTS = {"A 인쇄소": "경기 파주", "B 문화사": "서울 을지로", "기타": "직접입력"}
-ORDER_FILE = "orders_v21.csv"
-STOCK_FILE = "stock_v21.csv"
+ORDER_FILE = "orders_v22.csv"
+STOCK_FILE = "stock_v22.csv"
 
 def load_data():
     cols = ['일시', '업체', '규격', '수량', '상태', '담당', '완료시간']
@@ -61,7 +61,7 @@ def main():
     orders, stock = load_data()
     t1, t2, t3, t4, t5, t6 = st.tabs(["📝 주문등록", "👑 승인관리", "🚚 배송업무", "📦 재고현황", "📊 전체이력", "📈 분석현황"])
 
-    with t1: # 주문 등록 및 본인 주문 취소
+    with t1: # 주문 등록 및 등록 시간 확인
         st.subheader("신규 주문")
         name = st.selectbox("업체", list(CLIENTS.keys()))
         sp = st.selectbox("규격", stock['규격'].tolist())
@@ -69,22 +69,24 @@ def main():
         st.write(f"현재고: **{cur_s}** 박스")
         qt = st.number_input("수량", min_value=1, max_value=int(cur_s), value=10)
         if st.button("주문 전송", type="primary", use_container_width=True):
-            new = {'일시':datetime.now().strftime("%m/%d %H:%M"),'업체':name,'규격':sp,'수량':qt,'상태':'대기','담당':'-','완료시간':'-'}
+            # 주문 등록 시 현재 날짜와 시간 기록 (예: 2026-04-07 13:45)
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+            new = {'일시':now_str, '업체':name, '규격':sp, '수량':qt, '상태':'대기', '담당':'-', '완료시간':'-'}
             orders = pd.concat([orders, pd.DataFrame([new])], ignore_index=True)
             stock.loc[stock['규격']==sp, '현재고'] -= qt
-            save_data(orders, stock); st.success("주문 완료!"); st.rerun()
+            save_data(orders, stock); st.success(f"주문 완료! ({now_str})"); st.rerun()
         
         st.divider()
-        st.subheader("내가 등록한 대기 주문")
-        # 아직 승인 전인(대기) 주문들만 노출
+        st.subheader("내가 등록한 대기 주문 (취소 가능)")
         my_wait = orders[orders['상태']=='대기']
         if len(my_wait) > 0:
             for i, r in my_wait.iterrows():
                 with st.container(border=True):
                     col_a, col_b = st.columns([3, 1])
-                    col_a.write(f"**{r['업체']}** | {r['규격']} {r['수량']}박스")
+                    # 등록된 '일시'를 강조해서 표시
+                    col_a.write(f"🕒 **등록시간: {r['일시']}**")
+                    col_a.write(f"📦 {r['업체']} | {r['규격']} {r['수량']}박스")
                     if col_b.button("취소하기", key=f"cancel_{i}", type="secondary"):
-                        # 재고 복구 및 주문 삭제
                         stock.loc[stock['규격']==r['규격'], '현재고'] += r['수량']
                         orders = orders.drop(i)
                         save_data(orders, stock)
@@ -99,6 +101,7 @@ def main():
         if len(wait) == 0: st.write("✅ 대기 중인 주문이 없습니다.")
         for i, r in wait.iterrows():
             with st.container(border=True):
+                st.write(f"🕒 등록: {r['일시']}")
                 st.write(f"**{r['업체']}** | {r['규격']} {r['수량']}박스")
                 if st.session_state.ur == "관리자":
                     if st.button(f"승인하기", key=f"ap_{i}", use_container_width=True):
@@ -112,6 +115,7 @@ def main():
             st.write("📦 **배송 준비 중**")
             for i, r in ready.iterrows():
                 with st.container(border=True):
+                    st.write(f"🕒 주문일시: {r['일시']}")
                     st.write(f"**{r['업체']}** ({r['규격']})")
                     if st.button("배송 출발", key=f"go_{i}", use_container_width=True):
                         orders.at[i,'상태']='중'; orders.at[i,'담당']=st.session_state.un
@@ -123,10 +127,11 @@ def main():
             for i, r in ing.iterrows():
                 with st.container(border=True):
                     st.write(f"📍 **{r['업체']}** (담당: {r['담당']})")
+                    st.write(f"🕒 주문일시: {r['일시']}")
                     if st.session_state.un == r['담당'] or st.session_state.ur == "관리자":
                         if st.button("완료 처리", key=f"fi_{i}", type="primary", use_container_width=True):
                             orders.at[i,'상태']='완료'
-                            orders.at[i,'완료시간']=datetime.now().strftime("%m/%d %H:%M")
+                            orders.at[i,'완료시간']=datetime.now().strftime("%Y-%m-%d %H:%M")
                             save_data(orders, stock); st.rerun()
                     else: st.caption(f"✅ {r['담당']}님이 배송 중입니다.")
 
@@ -143,7 +148,7 @@ def main():
                 stock.loc[stock['규격']==e_sp, '현재고'] = n_v
                 save_data(orders, stock); st.success("수정됨"); st.rerun()
 
-    with t5: # 전체 이력
+    with t5: # 전체 이력 (일시 확인 가능)
         st.subheader("전체 주문 및 배송 이력")
         st.dataframe(orders.iloc[::-1], use_container_width=True)
 
