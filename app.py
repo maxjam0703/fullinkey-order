@@ -6,8 +6,8 @@ from datetime import datetime
 # 1. 설정 및 데이터 경로
 USER_DB = {"admin": ["fullin123", "이사장", "관리자"], "staff1": ["1111", "김기사", "직원"]}
 CLIENTS = {"A 인쇄소": "경기 파주", "B 문화사": "서울 을지로", "기타": "직접입력"}
-ORDER_FILE = "orders_v14.csv"
-STOCK_FILE = "stock_v14.csv"
+ORDER_FILE = "orders_v15.csv"
+STOCK_FILE = "stock_v15.csv"
 
 def load_data():
     orders = pd.read_csv(ORDER_FILE) if os.path.exists(ORDER_FILE) else pd.DataFrame(columns=['일시','업체','규격','수량','상태','담당'])
@@ -33,15 +33,36 @@ def main():
     st.set_page_config(page_title="Fullinkey", layout="wide")
     apply_style()
     
+    # 세션 초기화
     if 'login' not in st.session_state: st.session_state.login = False
+
+    # 로그인 화면
     if not st.session_state.login:
-        st.title("🔑 Fullinkey 로그인")
-        uid, upw = st.text_input("아이디"), st.text_input("비밀번호", type="password")
-        if st.button("접속하기", use_container_width=True, type="primary"):
-            if uid in USER_DB and USER_DB[uid][0] == upw:
-                st.session_state.login, st.session_state.un, st.session_state.ur = True, USER_DB[uid][1], USER_DB[uid][2]
-                st.rerun()
+        col1, col2, col3 = st.columns([1, 1.2, 1])
+        with col2:
+            st.title("🔑 Fullinkey 로그인")
+            uid = st.text_input("아이디")
+            upw = st.text_input("비밀번호", type="password")
+            if st.button("접속하기", use_container_width=True, type="primary"):
+                if uid in USER_DB and USER_DB[uid][0] == upw:
+                    st.session_state.login = True
+                    st.session_state.un = USER_DB[uid][1]
+                    st.session_state.ur = USER_DB[uid][2]
+                    st.rerun()
+                else:
+                    st.error("아이디 또는 비밀번호가 틀립니다.")
         return
+
+    # 사이드바 (로그아웃 기능 강화)
+    with st.sidebar:
+        st.title("Fullinkey")
+        st.write(f"👤 **{st.session_state.un}**님 ({st.session_state.ur})")
+        st.divider()
+        if st.button("🔴 로그아웃", use_container_width=True):
+            # 모든 세션 정보 삭제 후 새로고침
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.rerun()
 
     orders, stock = load_data()
     t1, t2, t3, t4, t5 = st.tabs(["📝 주문등록", "👑 승인관리", "🚚 배송업무", "📦 재고현황", "📊 전체이력"])
@@ -59,7 +80,7 @@ def main():
             stock.loc[stock['규격']==sp, '현재고'] -= qt
             save_data(orders, stock); st.success("주문 완료!"); st.rerun()
 
-    with t2: # 승인 관리 (조회 가능)
+    with t2: # 승인 관리
         st.subheader("실시간 승인 현황")
         wait = orders[orders['상태']=='대기']
         if len(wait) == 0: st.write("✅ 대기 중인 주문이 없습니다.")
@@ -71,35 +92,28 @@ def main():
                         orders.at[i,'상태']='배송전'; save_data(orders, stock); st.rerun()
                 else: st.caption("🕒 관리자 승인 대기 중...")
 
-    with t3: # 배송 업무 (조회 및 진행도 확인)
+    with t3: # 배송 업무
         st.subheader("배송 진행 상황")
-        
-        # 1. 배송 대기 (승인 완료 후)
         ready = orders[orders['상태']=='배송전']
         if len(ready) > 0:
             st.write("📦 **배송 준비 중 (승인완료)**")
             for i, r in ready.iterrows():
                 with st.container(border=True):
-                    st.write(f"**{r['업체']}** ({r['규격']}) - 준비 중")
+                    st.write(f"**{r['업체']}** ({r['규격']})")
                     if st.button("배송 출발", key=f"go_{i}", use_container_width=True):
                         orders.at[i,'상태']='중'; orders.at[i,'담당']=st.session_state.un
                         save_data(orders, stock); st.rerun()
-        
         st.divider()
-        
-        # 2. 배송 중 (진행도 표시)
         ing = orders[orders['상태']=='중']
         if len(ing) > 0:
             st.write("🚚 **현재 배송 중**")
             for i, r in ing.iterrows():
                 with st.container(border=True):
                     st.write(f"📍 **{r['업체']}** (담당: {r['담당']})")
-                    # 본인이 담당자이거나 관리자일 때만 완료 버튼 노출
                     if st.session_state.un == r['담당'] or st.session_state.ur == "관리자":
                         if st.button("배송 완료 처리", key=f"fi_{i}", type="primary", use_container_width=True):
                             orders.at[i,'상태']='완료'; save_data(orders, stock); st.rerun()
-                    else:
-                        st.caption(f"✅ {r['담당']}님이 배송하고 있습니다.")
+                    else: st.caption(f"✅ {r['담당']}님이 배송 중입니다.")
 
     with t4: # 재고 현황
         st.subheader("실시간 재고")
