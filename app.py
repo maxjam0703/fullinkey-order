@@ -20,7 +20,7 @@ CLIENT_INFO = {
     "기타": {"주소": "직접입력 필요", "담당자": "확인요망", "연락처": "000-0000-0000"}
 }
 
-DB_FILE = "fullinkey_orders_final_v3.csv"
+DB_FILE = "fullinkey_orders_v4.csv"
 
 def load_data():
     if os.path.exists(DB_FILE):
@@ -30,116 +30,76 @@ def load_data():
 def save_data(df):
     df.to_csv(DB_FILE, index=False, encoding='utf-8-sig')
 
-# --- [자동 로그인 로직] ---
-# 세션 상태 초기화
+# --- [디자인: 커스텀 CSS] ---
+def apply_custom_design():
+    st.markdown("""
+        <style>
+        /* 메인 배경 및 폰트 */
+        .stApp { background-color: #f8f9fa; }
+        h1, h2, h3 { color: #003366; font-family: 'Pretendard', sans-serif; }
+        
+        /* 버튼 디자인 */
+        .stButton>button {
+            border-radius: 8px;
+            border: none;
+            height: 3em;
+            transition: all 0.3s;
+        }
+        .stButton>button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        /* 카드 스타일 박스 */
+        div[data-testid="stExpander"], div.stChatMessage {
+            background-color: white;
+            border-radius: 12px;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        
+        /* 탭 디자인 */
+        .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+        .stTabs [data-baseweb="tab"] {
+            background-color: #ffffff;
+            border-radius: 8px 8px 0 0;
+            padding: 10px 20px;
+            color: #666;
+        }
+        .stTabs [aria-selected="true"] { background-color: #003366 !important; color: white !important; }
+        </style>
+    """, unsafe_allow_html=True)
+
+# 세션 관리
 if 'logged_in' not in st.session_state:
-    # 로컬 스토리지처럼 작동하는 세션 체크 (브라우저 탭 유지 시 자동로그인)
     st.session_state.logged_in = False
 
-# --- [로그인 화면] ---
+# --- [화면 구성] ---
 def login_screen():
-    st.title("🔑 Fullinkey 로그인")
-    user_id = st.text_input("아이디")
-    user_pw = st.text_input("비밀번호", type="password")
-    
-    # 자동 로그인 체크박스 추가
-    remember_me = st.checkbox("로그인 상태 유지하기")
-    
-    if st.button("로그인", use_container_width=True, type="primary"):
-        if user_id in USER_DB and USER_DB[user_id][0] == user_pw:
-            st.session_state.logged_in = True
-            st.session_state.user_name = USER_DB[user_id][1]
-            st.session_state.user_role = USER_DB[user_id][2]
-            st.success(f"{st.session_state.user_name}님, 환영합니다!")
-            time.sleep(0.5)
-            st.rerun()
-        else:
-            st.error("아이디 또는 비밀번호가 틀렸습니다.")
+    apply_custom_design()
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("<div style='text-align: center; padding: 50px 0;'>", unsafe_allow_html=True)
+        st.title("Fullinkey")
+        st.markdown("<p style='color: #666;'>Smart Printing Logistics Solution</p>", unsafe_allow_html=True)
+        
+        with st.container(border=True):
+            user_id = st.text_input("ID")
+            user_pw = st.text_input("Password", type="password")
+            remember = st.checkbox("로그인 상태 유지")
+            
+            if st.button("LOGIN", use_container_width=True, type="primary"):
+                if user_id in USER_DB and USER_DB[user_id][0] == user_pw:
+                    st.session_state.logged_in = True
+                    st.session_state.user_name = USER_DB[user_id][1]
+                    st.session_state.user_role = USER_DB[user_id][2]
+                    st.rerun()
+                else:
+                    st.error("계정 정보를 확인해주세요.")
 
-# --- [메인 시스템] ---
 def main_system():
+    apply_custom_design()
+    
     with st.sidebar:
-        st.title("Fullinkey 주문관리")
-        st.write(f"👤 **{st.session_state.user_name}** ({st.session_state.user_role})")
-        if st.button("로그아웃", use_container_width=True):
-            st.session_state.logged_in = False
-            st.rerun()
-
-    # 데이터 로드
-    if 'orders' not in st.session_state:
-        st.session_state.orders = load_data()
-
-    tab1, tab2, tab3, tab4 = st.tabs(["📝 주문등록", "👑 승인대기", "🚚 배송업무", "📊 현황"])
-
-    # (이하 탭별 기능 코드는 이전과 동일하게 유지...)
-    with tab1:
-        st.subheader("새 주문 넣기")
-        client_name = st.selectbox("거래처 선택", list(CLIENT_INFO.keys()))
-        info = CLIENT_INFO[client_name]
-        st.info(f"🏠 {info['주소']}\n📞 담당: {info['담당자']} ({info['연락처']})")
-        spec = st.select_slider("규격 선택", options=["0.15mm", "0.30mm", "무현상"])
-        count = st.number_input("수량(박스)", min_value=1, value=10)
-        if st.button("🚀 주문 전송", use_container_width=True, type="primary"):
-            new_order = {
-                '주문일시': datetime.now().strftime("%m/%d %H:%M"),
-                '업체명': client_name, '주소': info['주소'], '담당자': info['담당자'], '연락처': info['연락처'],
-                '규격': spec, '수량': count, '주문자': st.session_state.user_name,
-                '상태': '승인대기', '승인자': '-', '배송담당': '-'
-            }
-            st.session_state.orders = pd.concat([st.session_state.orders, pd.DataFrame([new_order])], ignore_index=True)
-            save_data(st.session_state.orders)
-            st.success("접수 완료!")
-
-    with tab2:
-        if st.session_state.user_role == "관리자":
-            pending = st.session_state.orders[st.session_state.orders['상태'] == '승인대기']
-            for idx, row in pending.iterrows():
-                with st.container(border=True):
-                    st.write(f"**[{row['업체명']}]** {row['규격']} / {row['수량']}박스")
-                    if st.button("✅ 승인", key=f"app_{idx}", use_container_width=True):
-                        st.session_state.orders.at[idx, '상태'] = '배송대기'
-                        st.session_state.orders.at[idx, '승인자'] = st.session_state.user_name
-                        save_data(st.session_state.orders)
-                        st.rerun()
-        else: st.warning("관리자 전용")
-
-    with tab3:
-        st.subheader("📦 배송 가능 목록")
-        wait_list = st.session_state.orders[st.session_state.orders['상태'] == '배송대기']
-        for idx, row in wait_list.iterrows():
-            with st.container(border=True):
-                st.write(f"📍 **{row['업체명']}** ({row['규격']} {row['수량']}박스)")
-                if st.button("🙋‍♂️ 배송시작", key=f"take_{idx}", use_container_width=True):
-                    st.session_state.orders.at[idx, '상태'] = '배송중'
-                    st.session_state.orders.at[idx, '배송담당'] = st.session_state.user_name
-                    save_data(st.session_state.orders)
-                    st.rerun()
-        st.divider()
-        st.subheader("🚚 나의 배송 현황")
-        my_list = st.session_state.orders[(st.session_state.orders['상태'] == '배송중') & (st.session_state.orders['배송담당'] == st.session_state.user_name)]
-        for idx, row in my_list.iterrows():
-            with st.container(border=True):
-                st.write(f"**{row['업체명']}**")
-                c1, c2 = st.columns(2)
-                c1.link_button("📞 전화", f"tel:{row['연락처']}", use_container_width=True)
-                map_url = f"https://map.kakao.com/link/search/{urllib.parse.quote(row['주소'])}"
-                c2.link_button("🗺️ 길찾기", map_url, use_container_width=True)
-                if st.button("🏁 완료", key=f"done_{idx}", use_container_width=True, type="primary"):
-                    st.session_state.orders.at[idx, '상태'] = '배송완료'
-                    save_data(st.session_state.orders)
-                    st.rerun()
-
-    with tab4:
-        recent = st.session_state.orders.iloc[::-1].head(15)
-        for idx, row in recent.iterrows():
-            with st.container(border=True):
-                st.write(f"**{row['상태']}** | {row['업체명']}")
-                st.caption(f"{row['규격']} {row['수량']}박스 / 담당: {row['배송담당']}")
-
-# --- 프로그램 시작점 ---
-if not st.session_state.logged_in:
-    st.set_page_config(page_title="Fullinkey Login", layout="centered")
-    login_screen()
-else:
-    st.set_page_config(page_title="Fullinkey 주문관리", layout="wide")
-    main_system()
+        st.markdown(f"### {st.session_state.user_name}")
+        st.caption(f"Role: {st.session_state.user_role
