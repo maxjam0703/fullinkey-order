@@ -1,11 +1,3 @@
-이사장님, 시각화 탭에서 업체 이름과 규격 이름이 세로로 서 있어서 보기 불편하셨군요!
-
-그래프에 들어가는 글자가 많아지면 시스템이 자동으로 공간을 아끼려고 글자를 세워버리는데, 이를 해결하기 위해 가로로 눕히거나 그래프 형식을 살짝 조정하는 코드를 반영했습니다.
-
-이제 업체명이 길어도 가로로 편하게 읽으실 수 있을 거예요.
-
-📦 [그래프 가독성 개선] 풀인키 전체 코드 (app.py)
-Python
 import streamlit as st
 import pandas as pd
 import os
@@ -136,18 +128,14 @@ def main():
         st.subheader("전체 주문 및 배송 이력")
         st.dataframe(orders.iloc[::-1], use_container_width=True)
 
-    with t6: # 분석 현황 (글자 가로 수정 버전)
+    with t6: # 분석 현황
         st.subheader("업체별 주문 수량 분석")
         if len(orders) > 0:
-            # 업체별 수량 합계 계산
             chart_data = orders.groupby('업체')['수량'].sum().reset_index()
-            # 가로 막대 그래프로 변경 (글자가 세로로 서지 않도록 함)
             st.bar_chart(data=chart_data, x='업체', y='수량', color="#003366", horizontal=True)
-            
             st.divider()
             st.subheader("규격별 주문 비중")
             spec_data = orders.groupby('규격')['수량'].sum().reset_index()
-            # 규격별 분석도 가로형으로 제공하여 텍스트 가독성 확보
             st.bar_chart(data=spec_data, x='규격', y='수량', horizontal=True)
         else:
             st.info("데이터가 충분하지 않습니다.")
