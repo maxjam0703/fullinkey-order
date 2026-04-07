@@ -6,7 +6,7 @@ from datetime import datetime
 # --- [설정 1. 사용자 DB] ---
 USER_DB = {
     "admin": ["fullin123", "이사장", "관리자"],
-    "maxjam": ["0710", "이재민 부장", "직원"],
+    "staff1": ["1111", "김철수 기사", "직원"],
     "staff2": ["2222", "박영희 대리", "직원"]
 }
 
@@ -20,7 +20,6 @@ def load_data():
 def save_data(df):
     df.to_csv(DB_FILE, index=False, encoding='utf-8-sig')
 
-# 세션 관리
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 if 'orders' not in st.session_state:
@@ -29,7 +28,6 @@ if 'orders' not in st.session_state:
 # --- [로그인 화면] ---
 def login_screen():
     st.title("🔑 Full In Key")
-    st.caption("스마트 주문 관리 시스템")
     with st.container():
         user_id = st.text_input("아이디")
         user_pw = st.text_input("비밀번호", type="password")
@@ -44,104 +42,97 @@ def login_screen():
 
 # --- [메인 시스템] ---
 def main_system():
-    # 사이드바를 모바일에서도 보기 편하게 최소화
     with st.sidebar:
         st.title("메뉴")
-        st.write(f"👤 **{st.session_state.user_name}** ({st.session_state.user_role})")
+        st.write(f"👤 **{st.session_state.user_name}**")
         if st.button("로그아웃", use_container_width=True):
             st.session_state.logged_in = False
             st.rerun()
 
-    st.title("📦 Full In Key 주문")
+    st.title("📦 Full In Key 주문관리")
     
-    # 탭 메뉴로 화면 분할 (모바일에서 넘겨보기 편함)
-    tab1, tab2, tab3 = st.tabs(["📝 주문등록", "🔔 승인관리", "📊 전체현황"])
+    # 탭 구성: 입력 / 사장님 승인 / 기사님 배송 / 현황
+    tab1, tab2, tab3, tab4 = st.tabs(["📝 주문등록", "👑 승인대기", "🚚 배송업무", "📊 전체현황"])
 
-    # --- TAB 1: 주문 등록 ---
+    # --- 1. 주문 등록 (모든 직원) ---
     with tab1:
-        with st.expander("신규 주문 입력하기", expanded=True):
-            client = st.selectbox("거래처 선택", ["A 인쇄소", "B 문화사", "C 패키지", "기타"])
-            spec = st.select_slider("판재 규격", options=["0.15mm", "0.30mm", "무현상"])
-            count = st.number_input("수량(박스)", min_value=1, value=10, step=5)
-            
+        with st.expander("신규 주문 입력", expanded=True):
+            client = st.selectbox("거래처", ["A 인쇄소", "B 문화사", "C 패키지", "기타"])
+            spec = st.select_slider("규격", options=["0.15mm", "0.30mm", "무현상"])
+            count = st.number_input("수량(박스)", min_value=1, value=10)
             if st.button("🚀 주문 전송", use_container_width=True):
                 new_order = {
                     '주문일시': datetime.now().strftime("%m/%d %H:%M"),
                     '업체명': client, '규격': spec, '수량': count,
                     '주문자': st.session_state.user_name,
-                    '상태': '대기', '승인자': '-', '배송담당': '-'
+                    '상태': '승인대기', '승인자': '-', '배송담당': '-'
                 }
                 st.session_state.orders = pd.concat([st.session_state.orders, pd.DataFrame([new_order])], ignore_index=True)
                 save_data(st.session_state.orders)
-                st.success("주문이 완료되었습니다!")
+                st.success("접수 완료! 사장님 승인을 기다립니다.")
 
-    # --- TAB 2: 승인 관리 ---
+    # --- 2. 승인 관리 (관리자 전용) ---
     with tab2:
         if st.session_state.user_role == "관리자":
-            pending = st.session_state.orders[st.session_state.orders['상태'] == '대기']
+            pending = st.session_state.orders[st.session_state.orders['상태'] == '승인대기']
             if not pending.empty:
                 for idx, row in pending.iterrows():
-                    # 모바일 최적화: 카드 스타일 레이아웃
                     with st.container(border=True):
                         st.subheader(f"📍 {row['업체명']}")
-                        st.write(f"**규격:** {row['규격']} / **수량:** {row['수량']}박스")
-                        st.caption(f"요청: {row['주문자']} ({row['주문일시']})")
-                        
-                        d_man = st.selectbox("배송자", ["김기사", "이대리", "외부용달"], key=f"d_{idx}")
-                        
-                        col_a, col_b = st.columns(2)
-                        if col_a.button("✅ 승인", key=f"app_{idx}", use_container_width=True):
-                            st.session_state.orders.at[idx, '상태'] = '완료'
+                        st.write(f"{row['규격']} / {row['수량']}박스 (요청: {row['주문자']})")
+                        if st.button("✅ 주문 승인하기", key=f"admin_app_{idx}", use_container_width=True):
+                            st.session_state.orders.at[idx, '상태'] = '배송대기'
                             st.session_state.orders.at[idx, '승인자'] = st.session_state.user_name
-                            st.session_state.orders.at[idx, '배송담당'] = d_man
-                            save_data(st.session_state.orders)
-                            st.rerun()
-                        if col_b.button("❌ 반려", key=f"rej_{idx}", use_container_width=True):
-                            st.session_state.orders.at[idx, '상태'] = '반려'
                             save_data(st.session_state.orders)
                             st.rerun()
             else:
-                st.info("대기 중인 주문이 없습니다.")
+                st.info("새로 들어온 주문이 없습니다.")
         else:
-            st.warning("관리자 권한이 필요합니다.")
+            st.warning("🔒 이 사장님 전용 메뉴입니다.")
 
-    # --- TAB 3: 현황 보기 ---
+    # --- 3. 배송 업무 (배송 직원용) ---
     with tab3:
-        st.subheader("📊 주문 기록 (최근 10건)")
+        st.subheader("🚚 현재 배송 가능 목록")
+        # 승인이 완료된 '배송대기' 주문들
+        delivery_pending = st.session_state.orders[st.session_state.orders['상태'] == '배송대기']
         
-        # 최신순으로 10개만 가져오기
-        recent_orders = st.session_state.orders.iloc[::-1].head(10)
-        
-        if not recent_orders.empty:
-            for idx, row in recent_orders.iterrows():
-                # 상태에 따라 다른 색상 이모지 표시
-                status_emoji = "⏳" if row['상태'] == '대기' else "✅" if row['상태'] == '완료' else "❌"
-                
-                # 모바일용 카드 레이아웃
+        if not delivery_pending.empty:
+            for idx, row in delivery_pending.iterrows():
                 with st.container(border=True):
-                    # 제목줄: 상태와 업체명
-                    st.markdown(f"### {status_emoji} {row['업체명']}")
-                    
-                    # 상세 내용 (한 줄에 2개씩)
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.write(f"**규격:** {row['규격']}")
-                        st.write(f"**수량:** {row['수량']}박스")
-                    with c2:
-                        st.write(f"**주문자:** {row['주문자']}")
-                        st.write(f"**배송:** {row['배송담당']}")
-                    
-                    # 날짜 (작게 표시)
-                    st.caption(f"📅 주문일시: {row['주문일시']}")
-        else:
-            st.info("기록된 주문이 없습니다.")
-
+                    st.write(f"**[배송요청]** {row['업체명']} ({row['규격']} {row['수량']}박스)")
+                    if st.button(f"🙋‍♂️ 내가 배송하기", key=f"del_take_{idx}", use_container_width=True):
+                        st.session_state.orders.at[idx, '상태'] = '배송중'
+                        st.session_state.orders.at[idx, '배송담당'] = st.session_state.user_name
+                        save_data(st.session_state.orders)
+                        st.rerun()
+        
         st.divider()
-        # 엑셀 다운로드는 여전히 버튼으로 제공 (필요할 때 PC에서 받기용)
-        csv = st.session_state.orders.to_csv(index=False).encode('utf-8-sig')
-        st.download_button("📩 전체 내역 엑셀 다운로드", csv, "orders.csv", use_container_width=True)
+        st.subheader("📦 나의 배송중 목록")
+        # 내가 선택한 '배송중' 주문들
+        my_delivery = st.session_state.orders[
+            (st.session_state.orders['상태'] == '배송중') & 
+            (st.session_state.orders['배송담당'] == st.session_state.user_name)
+        ]
+        if not my_delivery.empty:
+            for idx, row in my_delivery.iterrows():
+                with st.container(border=True):
+                    st.write(f"🏠 {row['업체명']}로 이동 중...")
+                    if st.button("🏁 배송 완료 처리", key=f"del_fin_{idx}", use_container_width=True):
+                        st.session_state.orders.at[idx, '상태'] = '배송완료'
+                        save_data(st.session_state.orders)
+                        st.rerun()
+        else:
+            st.caption("선택한 배송 건이 없습니다.")
 
-# 실행
+    # --- 4. 전체 현황 (카드 리스트) ---
+    with tab4:
+        recent = st.session_state.orders.iloc[::-1].head(15)
+        for idx, row in recent.iterrows():
+            with st.container(border=True):
+                st.markdown(f"**{row['상태']}** | {row['업체명']}")
+                st.caption(f"{row['규격']} {row['수량']}박스 / 배송:{row['배송담당']}")
+
+# 실행 제어
 if not st.session_state.logged_in:
     st.set_page_config(page_title="Login", layout="centered")
     login_screen()
