@@ -6,8 +6,8 @@ from datetime import datetime
 # 1. 설정 및 데이터 경로
 USER_DB = {"admin": ["fullin123", "이사장", "관리자"], "staff1": ["1111", "김기사", "직원"]}
 CLIENTS = {"A 인쇄소": "경기 파주", "B 문화사": "서울 을지로", "기타": "직접입력"}
-ORDER_FILE = "orders_v19.csv"
-STOCK_FILE = "stock_v19.csv"
+ORDER_FILE = "orders_v20.csv"
+STOCK_FILE = "stock_v20.csv"
 
 def load_data():
     cols = ['일시', '업체', '규격', '수량', '상태', '담당', '완료시간']
@@ -26,7 +26,7 @@ def apply_style():
     st.markdown("""<style>
     .stApp {background:#f8f9fa}
     [data-testid='stSidebar'] .stMarkdown h1 {background:#003366;color:white;padding:25px!important;border-radius:12px;font-size:22px}
-    .stTabs [data-baseweb='tab'] {height:65px;padding:0 30px!important;background:white;border-radius:10px;margin-right:10px;border:1px solid #ddd}
+    .stTabs [data-baseweb='tab'] {height:65px;padding:0 35px!important;background:white;border-radius:10px;margin-right:10px;border:1px solid #ddd}
     .stTabs [aria-selected='true'] {background:#003366!important;color:white!important;font-weight:bold}
     .stMetric {background:white; padding:20px; border-radius:15px; border:1px solid #eee}
     </style>""", unsafe_allow_html=True)
@@ -128,15 +128,18 @@ def main():
         st.subheader("전체 주문 및 배송 이력")
         st.dataframe(orders.iloc[::-1], use_container_width=True)
 
-    with t6: # 분석 현황
+    with t6: # 분석 현황 (불필요한 라벨 제거)
         st.subheader("업체별 주문 수량 분석")
         if len(orders) > 0:
             chart_data = orders.groupby('업체')['수량'].sum().reset_index()
-            st.bar_chart(data=chart_data, x='업체', y='수량', color="#003366", horizontal=True)
+            # y-axis 라벨(업체)을 빈 문자열로 처리하여 제거
+            st.bar_chart(data=chart_data, x='업체', y='수량', color="#003366", horizontal=True, x_label="", y_label="")
+            
             st.divider()
             st.subheader("규격별 주문 비중")
             spec_data = orders.groupby('규격')['수량'].sum().reset_index()
-            st.bar_chart(data=spec_data, x='규격', y='수량', horizontal=True)
+            # y-axis 라벨(규격)을 빈 문자열로 처리하여 제거
+            st.bar_chart(data=spec_data, x='규격', y='수량', horizontal=True, x_label="", y_label="")
         else:
             st.info("데이터가 충분하지 않습니다.")
 
