@@ -6,8 +6,8 @@ from datetime import datetime
 # 1. 설정 및 데이터 경로
 USER_DB = {"admin": ["fullin123", "이사장", "관리자"], "staff1": ["1111", "김기사", "직원"]}
 CLIENTS = {"A 인쇄소": "경기 파주", "B 문화사": "서울 을지로", "기타": "직접입력"}
-ORDER_FILE = "orders_v12.csv"
-STOCK_FILE = "stock_v12.csv"
+ORDER_FILE = "orders_v13.csv"
+STOCK_FILE = "stock_v13.csv"
 
 def load_data():
     orders = pd.read_csv(ORDER_FILE) if os.path.exists(ORDER_FILE) else pd.DataFrame(columns=['일시','업체','규격','수량','상태','담당'])
@@ -18,12 +18,12 @@ def save_data(orders, stock):
     orders.to_csv(ORDER_FILE, index=False, encoding='utf-8-sig')
     stock.to_csv(STOCK_FILE, index=False, encoding='utf-8-sig')
 
-# 2. 디자인 (여백 대폭 강화)
+# 2. 디자인 (여백 및 스타일)
 def apply_style():
     st.markdown("""<style>
     .stApp {background:#f8f9fa}
     [data-testid='stSidebar'] .stMarkdown h1 {background:#003366;color:white;padding:25px!important;border-radius:12px;font-size:22px}
-    .stTabs [data-baseweb='tab'] {height:65px;padding:0 40px!important;background:white;border-radius:10px;margin-right:10px;border:1px solid #ddd}
+    .stTabs [data-baseweb='tab'] {height:65px;padding:0 35px!important;background:white;border-radius:10px;margin-right:10px;border:1px solid #ddd}
     .stTabs [aria-selected='true'] {background:#003366!important;color:white!important;font-weight:bold}
     .stMetric {background:white; padding:20px; border-radius:15px; border:1px solid #eee}
     </style>""", unsafe_allow_html=True)
@@ -60,14 +60,20 @@ def main():
             save_data(orders, stock); st.success("주문 완료!"); st.rerun()
 
     with t2:
-        if st.session_state.ur == "관리자":
-            wait = orders[orders['상태']=='대기']
+        st.subheader("실시간 승인 대기 목록")
+        wait = orders[orders['상태']=='대기']
+        if len(wait) == 0:
+            st.write("✅ 현재 대기 중인 주문이 없습니다.")
+        else:
             for i, r in wait.iterrows():
                 with st.container(border=True):
-                    st.write(f"**{r['업체']}** | {r['규격']} {r['수량']}박스")
-                    if st.button(f"승인하기", key=f"ap_{i}", use_container_width=True):
-                        orders.at[i,'상태']='배송전'; save_data(orders, stock); st.rerun()
-        else: st.info("관리자 권한 메뉴")
+                    st.write(f"**{r['업체']}** | {r['규격']} {r['수량']}박스 (상태: {r['상태']})")
+                    # 관리자일 때만 승인 버튼 노출
+                    if st.session_state.ur == "관리자":
+                        if st.button(f"승인하기", key=f"ap_{i}", use_container_width=True):
+                            orders.at[i,'상태']='배송전'; save_data(orders, stock); st.rerun()
+                    else:
+                        st.caption("ℹ️ 승인 대기 중입니다. 관리자의 승인을 기다려주세요.")
 
     with t3:
         ready = orders[orders['상태']=='배송전']
