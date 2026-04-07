@@ -107,12 +107,39 @@ def main_system():
 
     # --- TAB 3: 현황 보기 ---
     with tab3:
-        # 모바일에서는 표를 작게 보여주고 다운로드 버튼 제공
-        st.write("최근 주문 10건")
-        st.dataframe(st.session_state.orders.iloc[::-1].head(10), use_container_width=True)
+        st.subheader("📊 주문 기록 (최근 10건)")
         
+        # 최신순으로 10개만 가져오기
+        recent_orders = st.session_state.orders.iloc[::-1].head(10)
+        
+        if not recent_orders.empty:
+            for idx, row in recent_orders.iterrows():
+                # 상태에 따라 다른 색상 이모지 표시
+                status_emoji = "⏳" if row['상태'] == '대기' else "✅" if row['상태'] == '완료' else "❌"
+                
+                # 모바일용 카드 레이아웃
+                with st.container(border=True):
+                    # 제목줄: 상태와 업체명
+                    st.markdown(f"### {status_emoji} {row['업체명']}")
+                    
+                    # 상세 내용 (한 줄에 2개씩)
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.write(f"**규격:** {row['규격']}")
+                        st.write(f"**수량:** {row['수량']}박스")
+                    with c2:
+                        st.write(f"**주문자:** {row['주문자']}")
+                        st.write(f"**배송:** {row['배송담당']}")
+                    
+                    # 날짜 (작게 표시)
+                    st.caption(f"📅 주문일시: {row['주문일시']}")
+        else:
+            st.info("기록된 주문이 없습니다.")
+
+        st.divider()
+        # 엑셀 다운로드는 여전히 버튼으로 제공 (필요할 때 PC에서 받기용)
         csv = st.session_state.orders.to_csv(index=False).encode('utf-8-sig')
-        st.download_button("📩 전체 내역 엑셀 저장", csv, "orders.csv", use_container_width=True)
+        st.download_button("📩 전체 내역 엑셀 다운로드", csv, "orders.csv", use_container_width=True)
 
 # 실행
 if not st.session_state.logged_in:
