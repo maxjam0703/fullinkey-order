@@ -19,7 +19,7 @@ CLIENT_INFO = {
     "기타": {"주소": "직접입력 필요", "담당자": "확인요망", "연락처": "000-0000-0000"}
 }
 
-DB_FILE = "fullinkey_orders_final.csv"
+DB_FILE = "fullinkey_orders_final_v2.csv"
 
 def load_data():
     if os.path.exists(DB_FILE):
@@ -34,6 +34,7 @@ if 'logged_in' not in st.session_state:
 if 'orders' not in st.session_state:
     st.session_state.orders = load_data()
 
+# --- [로그인 화면] ---
 def login_screen():
     st.title("🔑 Full In Key 로그인")
     user_id = st.text_input("아이디")
@@ -47,6 +48,7 @@ def login_screen():
         else:
             st.error("정보가 일치하지 않습니다.")
 
+# --- [메인 시스템] ---
 def main_system():
     with st.sidebar:
         st.title("메뉴")
@@ -57,6 +59,7 @@ def main_system():
 
     tab1, tab2, tab3, tab4 = st.tabs(["📝 주문등록", "👑 승인대기", "🚚 배송업무", "📊 현황"])
 
+    # --- 1. 주문 등록 ---
     with tab1:
         st.subheader("새 주문 넣기")
         client_name = st.selectbox("거래처 선택", list(CLIENT_INFO.keys()))
@@ -75,6 +78,7 @@ def main_system():
             save_data(st.session_state.orders)
             st.success("접수 완료!")
 
+    # --- 2. 승인 대기 ---
     with tab2:
         if st.session_state.user_role == "관리자":
             pending = st.session_state.orders[st.session_state.orders['상태'] == '승인대기']
@@ -82,16 +86,17 @@ def main_system():
                 for idx, row in pending.iterrows():
                     with st.container(border=True):
                         st.write(f"**[{row['업체명']}]** {row['규격']} / {row['수량']}박스")
-                        if st.button("✅ 승인하기", key=f"app_{idx}", use_container_width=True):
+                        if st.button("✅ 주문 승인", key=f"app_{idx}", use_container_width=True):
                             st.session_state.orders.at[idx, '상태'] = '배송대기'
                             st.session_state.orders.at[idx, '승인자'] = st.session_state.user_name
                             save_data(st.session_state.orders)
                             st.rerun()
             else:
-                st.info("대기 주문 없음")
+                st.info("대기 주문이 없습니다.")
         else:
-            st.warning("🔒 관리자 전용")
+            st.warning("🔒 관리자(이사장) 전용 메뉴입니다.")
 
+    # --- 3. 배송 업무 ---
     with tab3:
         st.subheader("📦 배송 가능 목록")
         wait_list = st.session_state.orders[st.session_state.orders['상태'] == '배송대기']
@@ -110,4 +115,28 @@ def main_system():
         for idx, row in my_list.iterrows():
             with st.container(border=True):
                 st.markdown(f"### {row['업체명']}")
-                st.
+                st.write(f"🏠 {row['주소']}")
+                c1, c2 = st.columns(2)
+                c1.link_button("📞 전화", f"tel:{row['연락처']}", use_container_width=True)
+                map_url = f"https://map.kakao.com/link/search/{urllib.parse.quote(row['주소'])}"
+                c2.link_button("🗺️ 길찾기", map_url, use_container_width=True)
+                if st.button("🏁 배송 완료 처리", key=f"done_{idx}", use_container_width=True, type="primary"):
+                    st.session_state.orders.at[idx, '상태'] = '배송완료'
+                    save_data(st.session_state.orders)
+                    st.rerun()
+
+    # --- 4. 현황 보기 ---
+    with tab4:
+        recent = st.session_state.orders.iloc[::-1].head(15)
+        for idx, row in recent.iterrows():
+            with st.container(border=True):
+                st.write(f"**{row['상태']}** | {row['업체명']} ({row['주문일시']})")
+                st.caption(f"{row['규격']} {row['수량']}박스 / 배송담당: {row['배송담당']}")
+
+# --- 실행 ---
+if not st.session_state.logged_in:
+    st.set_page_config(page_title="Login", layout="centered")
+    login_screen()
+else:
+    st.set_page_config(page_title="Full In Key", layout="wide")
+    main_system()
