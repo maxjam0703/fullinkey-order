@@ -6,7 +6,7 @@ from datetime import datetime
 # --- [설정 1. 사용자 DB] ---
 USER_DB = {
     "admin": ["fullin123", "이사장", "관리자"],
-    "staff1": ["1111", "김철수 기사", "직원"],
+    "maxjam": ["0710", "이재민 부장", "직원"],
     "staff2": ["2222", "박영희 대리", "직원"]
 }
 
