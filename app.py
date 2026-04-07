@@ -1,3 +1,11 @@
+이사장님, 배송이 정확히 언제 완료되었는지 기록되는 기능은 정산이나 거래처 확인 시 아주 중요한 데이터죠.
+
+기존의 상태 컬럼 외에 완료시간 컬럼을 새로 추가했습니다. 배송 기사님이 '배송 완료 처리' 버튼을 누르는 즉시, 그 시점의 날짜와 시간이 자동으로 기록되어 전체 이력 탭에서 확인하실 수 있습니다.
+
+이번에도 전체 코드를 통째로 복사해서 적용해 주세요.
+
+🕒 [배송 완료 시간 기록] 풀인키 전체 코드 (app.py)
+Python
 import streamlit as st
 import pandas as pd
 import os
@@ -6,11 +14,17 @@ from datetime import datetime
 # 1. 설정 및 데이터 경로
 USER_DB = {"admin": ["fullin123", "이사장", "관리자"], "staff1": ["1111", "김기사", "직원"]}
 CLIENTS = {"A 인쇄소": "경기 파주", "B 문화사": "서울 을지로", "기타": "직접입력"}
-ORDER_FILE = "orders_v15.csv"
-STOCK_FILE = "stock_v15.csv"
+ORDER_FILE = "orders_v16.csv"
+STOCK_FILE = "stock_v16.csv"
 
 def load_data():
-    orders = pd.read_csv(ORDER_FILE) if os.path.exists(ORDER_FILE) else pd.DataFrame(columns=['일시','업체','규격','수량','상태','담당'])
+    # 컬럼에 '완료시간' 추가
+    cols = ['일시', '업체', '규격', '수량', '상태', '담당', '완료시간']
+    orders = pd.read_csv(ORDER_FILE) if os.path.exists(ORDER_FILE) else pd.DataFrame(columns=cols)
+    # 기존 파일에 '완료시간' 컬럼이 없으면 자동 생성
+    if '완료시간' not in orders.columns:
+        orders['완료시간'] = '-'
+    
     stock = pd.read_csv(STOCK_FILE) if os.path.exists(STOCK_FILE) else pd.DataFrame({'규격': ["0.15mm", "0.30mm", "무현상"], '현재고': [500, 500, 500]})
     return orders, stock
 
@@ -33,10 +47,8 @@ def main():
     st.set_page_config(page_title="Fullinkey", layout="wide")
     apply_style()
     
-    # 세션 초기화
     if 'login' not in st.session_state: st.session_state.login = False
 
-    # 로그인 화면
     if not st.session_state.login:
         col1, col2, col3 = st.columns([1, 1.2, 1])
         with col2:
@@ -45,23 +57,16 @@ def main():
             upw = st.text_input("비밀번호", type="password")
             if st.button("접속하기", use_container_width=True, type="primary"):
                 if uid in USER_DB and USER_DB[uid][0] == upw:
-                    st.session_state.login = True
-                    st.session_state.un = USER_DB[uid][1]
-                    st.session_state.ur = USER_DB[uid][2]
+                    st.session_state.login, st.session_state.un, st.session_state.ur = True, USER_DB[uid][1], USER_DB[uid][2]
                     st.rerun()
-                else:
-                    st.error("아이디 또는 비밀번호가 틀립니다.")
+                else: st.error("로그인 정보가 올바르지 않습니다.")
         return
 
-    # 사이드바 (로그아웃 기능 강화)
     with st.sidebar:
         st.title("Fullinkey")
         st.write(f"👤 **{st.session_state.un}**님 ({st.session_state.ur})")
-        st.divider()
         if st.button("🔴 로그아웃", use_container_width=True):
-            # 모든 세션 정보 삭제 후 새로고침
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
+            for key in list(st.session_state.keys()): del st.session_state[key]
             st.rerun()
 
     orders, stock = load_data()
@@ -75,7 +80,7 @@ def main():
         st.write(f"현재고: **{cur_s}** 박스")
         qt = st.number_input("수량", min_value=1, max_value=int(cur_s), value=10)
         if st.button("주문 전송", type="primary", use_container_width=True):
-            new = {'일시':datetime.now().strftime("%m/%d %H:%M"),'업체':name,'규격':sp,'수량':qt,'상태':'대기','담당':'-'}
+            new = {'일시':datetime.now().strftime("%m/%d %H:%M"),'업체':name,'규격':sp,'수량':qt,'상태':'대기','담당':'-','완료시간':'-'}
             orders = pd.concat([orders, pd.DataFrame([new])], ignore_index=True)
             stock.loc[stock['규격']==sp, '현재고'] -= qt
             save_data(orders, stock); st.success("주문 완료!"); st.rerun()
@@ -96,7 +101,7 @@ def main():
         st.subheader("배송 진행 상황")
         ready = orders[orders['상태']=='배송전']
         if len(ready) > 0:
-            st.write("📦 **배송 준비 중 (승인완료)**")
+            st.write("📦 **배송 준비 중**")
             for i, r in ready.iterrows():
                 with st.container(border=True):
                     st.write(f"**{r['업체']}** ({r['규격']})")
@@ -112,7 +117,10 @@ def main():
                     st.write(f"📍 **{r['업체']}** (담당: {r['담당']})")
                     if st.session_state.un == r['담당'] or st.session_state.ur == "관리자":
                         if st.button("배송 완료 처리", key=f"fi_{i}", type="primary", use_container_width=True):
-                            orders.at[i,'상태']='완료'; save_data(orders, stock); st.rerun()
+                            orders.at[i,'상태']='완료'
+                            # 완료 버튼을 누른 현재 시간을 기록
+                            orders.at[i,'완료시간']=datetime.now().strftime("%m/%d %H:%M")
+                            save_data(orders, stock); st.rerun()
                     else: st.caption(f"✅ {r['담당']}님이 배송 중입니다.")
 
     with t4: # 재고 현황
@@ -128,7 +136,9 @@ def main():
                 stock.loc[stock['규격']==e_sp, '현재고'] = n_v
                 save_data(orders, stock); st.success("수정됨"); st.rerun()
 
-    with t5: st.dataframe(orders.iloc[::-1], use_container_width=True)
+    with t5: # 전체 이력 (완료시간 포함)
+        st.subheader("전체 주문 및 배송 이력")
+        st.dataframe(orders.iloc[::-1], use_container_width=True)
 
 if __name__ == "__main__":
     main()
