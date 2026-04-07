@@ -6,8 +6,8 @@ from datetime import datetime
 # 1. 설정 및 데이터 경로
 USER_DB = {"admin": ["fullin123", "이사장", "관리자"], "staff1": ["1111", "김기사", "직원"]}
 CLIENTS = {"A 인쇄소": "경기 파주", "B 문화사": "서울 을지로", "기타": "직접입력"}
-ORDER_FILE = "orders_v17.csv"
-STOCK_FILE = "stock_v17.csv"
+ORDER_FILE = "orders_v18.csv"
+STOCK_FILE = "stock_v18.csv"
 
 def load_data():
     cols = ['일시', '업체', '규격', '수량', '상태', '담당', '완료시간']
@@ -26,7 +26,7 @@ def apply_style():
     st.markdown("""<style>
     .stApp {background:#f8f9fa}
     [data-testid='stSidebar'] .stMarkdown h1 {background:#003366;color:white;padding:25px!important;border-radius:12px;font-size:22px}
-    .stTabs [data-baseweb='tab'] {height:65px;padding:0 35px!important;background:white;border-radius:10px;margin-right:10px;border:1px solid #ddd}
+    .stTabs [data-baseweb='tab'] {height:65px;padding:0 30px!important;background:white;border-radius:10px;margin-right:10px;border:1px solid #ddd}
     .stTabs [aria-selected='true'] {background:#003366!important;color:white!important;font-weight:bold}
     .stMetric {background:white; padding:20px; border-radius:15px; border:1px solid #eee}
     </style>""", unsafe_allow_html=True)
@@ -59,9 +59,9 @@ def main():
             st.rerun()
 
     orders, stock = load_data()
-    t1, t2, t3, t4, t5 = st.tabs(["📝 주문등록", "👑 승인관리", "🚚 배송업무", "📦 재고현황", "📊 전체이력"])
+    t1, t2, t3, t4, t5, t6 = st.tabs(["📝 주문등록", "👑 승인관리", "🚚 배송업무", "📦 재고현황", "📊 전체이력", "📈 분석현황"])
 
-    with t1:
+    with t1: # 주문 등록
         st.subheader("신규 주문")
         name = st.selectbox("업체", list(CLIENTS.keys()))
         sp = st.selectbox("규격", stock['규격'].tolist())
@@ -74,8 +74,8 @@ def main():
             stock.loc[stock['규격']==sp, '현재고'] -= qt
             save_data(orders, stock); st.success("주문 완료!"); st.rerun()
 
-    with t2:
-        st.subheader("실시간 승인 현황")
+    with t2: # 승인 관리
+        st.subheader("승인 대기")
         wait = orders[orders['상태']=='대기']
         if len(wait) == 0: st.write("✅ 대기 중인 주문이 없습니다.")
         for i, r in wait.iterrows():
@@ -84,9 +84,9 @@ def main():
                 if st.session_state.ur == "관리자":
                     if st.button(f"승인하기", key=f"ap_{i}", use_container_width=True):
                         orders.at[i,'상태']='배송전'; save_data(orders, stock); st.rerun()
-                else: st.caption("🕒 관리자 승인 대기 중...")
+                else: st.caption("🕒 승인 대기 중...")
 
-    with t3:
+    with t3: # 배송 업무
         st.subheader("배송 진행 상황")
         ready = orders[orders['상태']=='배송전']
         if len(ready) > 0:
@@ -105,13 +105,13 @@ def main():
                 with st.container(border=True):
                     st.write(f"📍 **{r['업체']}** (담당: {r['담당']})")
                     if st.session_state.un == r['담당'] or st.session_state.ur == "관리자":
-                        if st.button("배송 완료 처리", key=f"fi_{i}", type="primary", use_container_width=True):
+                        if st.button("완료 처리", key=f"fi_{i}", type="primary", use_container_width=True):
                             orders.at[i,'상태']='완료'
                             orders.at[i,'완료시간']=datetime.now().strftime("%m/%d %H:%M")
                             save_data(orders, stock); st.rerun()
                     else: st.caption(f"✅ {r['담당']}님이 배송 중입니다.")
 
-    with t4:
+    with t4: # 재고 현황
         st.subheader("실시간 재고")
         cols = st.columns(3)
         for i, row in stock.iterrows():
@@ -124,9 +124,24 @@ def main():
                 stock.loc[stock['규격']==e_sp, '현재고'] = n_v
                 save_data(orders, stock); st.success("수정됨"); st.rerun()
 
-    with t5:
+    with t5: # 전체 이력
         st.subheader("전체 주문 및 배송 이력")
         st.dataframe(orders.iloc[::-1], use_container_width=True)
+
+    with t6: # 분석 현황 (시각화)
+        st.subheader("업체별 주문 수량 분석")
+        if len(orders) > 0:
+            # 업체별 수량 합계 계산
+            chart_data = orders.groupby('업체')['수량'].sum().reset_index()
+            # 막대 그래프 표시
+            st.bar_chart(data=chart_data, x='업체', y='수량', color="#003366")
+            
+            st.divider()
+            st.subheader("규격별 주문 비중")
+            spec_data = orders.groupby('규격')['수량'].sum()
+            st.area_chart(spec_data)
+        else:
+            st.info("데이터가 충분하지 않습니다.")
 
 if __name__ == "__main__":
     main()
