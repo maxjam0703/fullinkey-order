@@ -6,8 +6,8 @@ from datetime import datetime
 # 1. 설정 및 데이터 경로
 USER_DB = {"admin": ["fullin123", "이사장", "관리자"], "staff1": ["1111", "김기사", "직원"]}
 CLIENTS = {"A 인쇄소": "경기 파주", "B 문화사": "서울 을지로", "기타": "직접입력"}
-ORDER_FILE = "orders_v20.csv"
-STOCK_FILE = "stock_v20.csv"
+ORDER_FILE = "orders_v21.csv"
+STOCK_FILE = "stock_v21.csv"
 
 def load_data():
     cols = ['일시', '업체', '규격', '수량', '상태', '담당', '완료시간']
@@ -61,7 +61,7 @@ def main():
     orders, stock = load_data()
     t1, t2, t3, t4, t5, t6 = st.tabs(["📝 주문등록", "👑 승인관리", "🚚 배송업무", "📦 재고현황", "📊 전체이력", "📈 분석현황"])
 
-    with t1: # 주문 등록
+    with t1: # 주문 등록 및 본인 주문 취소
         st.subheader("신규 주문")
         name = st.selectbox("업체", list(CLIENTS.keys()))
         sp = st.selectbox("규격", stock['규격'].tolist())
@@ -73,6 +73,25 @@ def main():
             orders = pd.concat([orders, pd.DataFrame([new])], ignore_index=True)
             stock.loc[stock['규격']==sp, '현재고'] -= qt
             save_data(orders, stock); st.success("주문 완료!"); st.rerun()
+        
+        st.divider()
+        st.subheader("내가 등록한 대기 주문")
+        # 아직 승인 전인(대기) 주문들만 노출
+        my_wait = orders[orders['상태']=='대기']
+        if len(my_wait) > 0:
+            for i, r in my_wait.iterrows():
+                with st.container(border=True):
+                    col_a, col_b = st.columns([3, 1])
+                    col_a.write(f"**{r['업체']}** | {r['규격']} {r['수량']}박스")
+                    if col_b.button("취소하기", key=f"cancel_{i}", type="secondary"):
+                        # 재고 복구 및 주문 삭제
+                        stock.loc[stock['규격']==r['규격'], '현재고'] += r['수량']
+                        orders = orders.drop(i)
+                        save_data(orders, stock)
+                        st.warning("주문이 취소되었습니다.")
+                        st.rerun()
+        else:
+            st.caption("취소 가능한 대기 주문이 없습니다.")
 
     with t2: # 승인 관리
         st.subheader("승인 대기")
@@ -128,17 +147,14 @@ def main():
         st.subheader("전체 주문 및 배송 이력")
         st.dataframe(orders.iloc[::-1], use_container_width=True)
 
-    with t6: # 분석 현황 (불필요한 라벨 제거)
+    with t6: # 분석 현황
         st.subheader("업체별 주문 수량 분석")
         if len(orders) > 0:
             chart_data = orders.groupby('업체')['수량'].sum().reset_index()
-            # y-axis 라벨(업체)을 빈 문자열로 처리하여 제거
             st.bar_chart(data=chart_data, x='업체', y='수량', color="#003366", horizontal=True, x_label="", y_label="")
-            
             st.divider()
             st.subheader("규격별 주문 비중")
             spec_data = orders.groupby('규격')['수량'].sum().reset_index()
-            # y-axis 라벨(규격)을 빈 문자열로 처리하여 제거
             st.bar_chart(data=spec_data, x='규격', y='수량', horizontal=True, x_label="", y_label="")
         else:
             st.info("데이터가 충분하지 않습니다.")
